@@ -1,222 +1,264 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:toko_buku/main.dart';
+import 'package:http/http.dart' as http;
+import 'package:toko_buku/Akun.dart';
+import 'package:toko_buku/pesanan.dart';
+import 'package:toko_buku/chart.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  List<ProductItem> products = [];
+  String baseUrl = "http://127.0.0.1:8000";
+
+  @override
+  void initState() {
+    super.initState();
+    fetchProducts();
+  }
+
+  Future<void> fetchProducts() async {
+    final response = await http.get(Uri.parse('$baseUrl/api/buku'));
+
+    if (response.statusCode == 200) {
+      print(response.body);
+      final List<dynamic> productData = json.decode(response.body);
+      setState(() {
+        products = productData.map((data) {
+          return ProductItem(
+            id: data['id'],
+            name: data['name'],
+            price: data['price'],
+            imageUrl: data['image_url'],
+            discount: data['discount'] ?? '',
+            description: data['description'],
+          );
+        }).toList();
+      });
+    } else {
+      throw Exception('Failed to load products');
+    }
+  }
+
+  Future<void> tambahKeranjang(String itemId) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String userId =
+        prefs.getString('user_id') ?? '636db03a-33a1-4a64-97ea-5713eac1b88e';
+    print(userId);
+    print(itemId);
+    final response = await http.post(
+        Uri.parse('$baseUrl/api/pemesanan?user_id=$userId&book_id=$itemId'));
+    print(response.statusCode);
+    if (response.statusCode == 200) {
+      setState(() {
+        _showSuccessSnackbar();
+        fetchProducts();
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal Menambahkan barang'),
+        ),
+      );
+    }
+  }
+
+  void _showSuccessSnackbar() {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Berhasil Menambahkan Pesanan'),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Book Store'),
+        backgroundColor: Colors.red,
+        title: const Text('Books Store'),
         actions: [
           IconButton(
-            icon: Icon(Icons.shopping_cart),
+            icon: const Icon(Icons.search),
             onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (context) => const CartScreen()),
-              );
+              // Add search functionality
             },
           ),
-          IconButton(
-            icon: Icon(Icons.add),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                    builder: (context) => const AddProductScreen()),
-              );
-            },
+          Stack(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.shopping_cart),
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => CartScreen(),
+                    ),
+                  );
+                },
+              ),
+              Positioned(
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.all(2),
+                  decoration: const BoxDecoration(
+                    color: Colors.yellow,
+                    borderRadius: BorderRadius.all(Radius.circular(6)),
+                  ),
+                  constraints: const BoxConstraints(
+                    minWidth: 18,
+                    minHeight: 18,
+                  ),
+                  child: const Text(
+                    '5',
+                    style: TextStyle(
+                      color: Colors.black,
+                      fontSize: 12,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                ),
+              )
+            ],
           ),
         ],
       ),
-      body: ListView(
-        padding: EdgeInsets.all(16.0),
-        children: <Widget>[
-          BookItem(
-            title: 'Book 1',
-            author: 'Author 1',
-            price: 'Rp 50.000',
+      body: ListView.builder(
+        padding: const EdgeInsets.all(8.0),
+        itemCount: products.length,
+        itemBuilder: (context, index) {
+          final product = products[index];
+          return ProductItemWidget(
+            product: product,
+            onAddToCart: () {
+              tambahKeranjang(product.id); // Use the correct product identifier
+            },
+          );
+        },
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.home),
+            label: 'Beranda',
           ),
-          BookItem(
-            title: 'Book 2',
-            author: 'Author 2',
-            price: 'Rp 60.000',
+          BottomNavigationBarItem(
+            icon: Icon(Icons.receipt),
+            label: 'Pesanan',
           ),
-          BookItem(
-            title: 'Book 3',
-            author: 'Author 3',
-            price: 'Rp 70.000',
+          BottomNavigationBarItem(
+            icon: Icon(Icons.account_circle),
+            label: 'Akun',
           ),
         ],
+        selectedItemColor: Colors.red,
+        onTap: (index) {
+          if (index == 1) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const PesananScreen()),
+            );
+          } else if (index == 2) {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => AkunScreen()),
+            );
+          }
+        },
       ),
     );
   }
 }
 
-class BookItem extends StatelessWidget {
-  final String title;
-  final String author;
+class ProductItem {
+  final String id;
+  final String name;
   final String price;
+  final String imageUrl;
+  final String discount;
+  final String description;
 
-  const BookItem({
-    super.key,
-    required this.title,
-    required this.author,
+  ProductItem({
+    required this.id,
+    required this.name,
     required this.price,
+    required this.imageUrl,
+    required this.discount,
+    required this.description,
+  });
+}
+
+class ProductItemWidget extends StatelessWidget {
+  final ProductItem product;
+  final VoidCallback onAddToCart;
+
+  const ProductItemWidget({
+    super.key,
+    required this.product,
+    required this.onAddToCart,
   });
 
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: ListTile(
-        title: Text(title),
-        subtitle: Text(author),
-        trailing: Text(price),
+      margin: const EdgeInsets.all(8.0),
+      child: InkWell(
         onTap: () {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (context) => EditProductScreen(
-                title: title,
-                author: author,
-                price: price,
+              builder: (context) => ProductDetailsScreen(
+                id: product.id,
+                name: product.name,
+                price: product.price,
+                imageUrl: product.imageUrl,
+                discount: product.discount,
+                description: product.description,
               ),
             ),
           );
         },
-        onLongPress: () {
-          showDialog(
-            context: context,
-            builder: (BuildContext context) {
-              return AlertDialog(
-                title: Text('Delete Product'),
-                content: Text('Are you sure you want to delete this product?'),
-                actions: [
-                  TextButton(
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                    },
-                    child: Text('Cancel'),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Image.network(product.imageUrl, fit: BoxFit.cover),
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    product.name,
+                    style: const TextStyle(fontSize: 16),
                   ),
-                  TextButton(
-                    onPressed: () {
-                      // Add logic to delete the product
-                      Navigator.of(context).pop();
-                    },
-                    child: Text('Delete'),
+                  const SizedBox(height: 4.0),
+                  if (product.discount.isNotEmpty)
+                    Text(
+                      product.discount,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: Colors.red,
+                      ),
+                    ),
+                  const SizedBox(height: 4.0),
+                  Text(
+                    product.price,
+                    style: const TextStyle(fontSize: 16),
                   ),
                 ],
-              );
-            },
-          );
-        },
-      ),
-    );
-  }
-}
-
-class CartScreen extends StatelessWidget {
-  const CartScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Cart'),
-      ),
-      body: ListView(
-        padding: EdgeInsets.all(16.0),
-        children: <Widget>[
-          CartItem(
-            title: 'Book 1',
-            author: 'Author 1',
-            price: 'Rp 50.000',
-          ),
-          CartItem(
-            title: 'Book 2',
-            author: 'Author 2',
-            price: 'Rp 60.000',
-          ),
-        ],
-      ),
-      bottomNavigationBar: Container(
-        padding: EdgeInsets.all(16.0),
-        child: ElevatedButton(
-          onPressed: () {
-            // Add logic to perform checkout
-          },
-          child: Text('Checkout'),
-        ),
-      ),
-    );
-  }
-}
-
-class CartItem extends StatelessWidget {
-  final String title;
-  final String author;
-  final String price;
-
-  const CartItem({
-    super.key,
-    required this.title,
-    required this.author,
-    required this.price,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: ListTile(
-        title: Text(title),
-        subtitle: Text(author),
-        trailing: Text(price),
-      ),
-    );
-  }
-}
-
-class AddProductScreen extends StatelessWidget {
-  const AddProductScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Add Product'),
-      ),
-      body: Padding(
-        padding: EdgeInsets.all(16.0),
-        child: Column(
-          children: <Widget>[
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Title',
-                border: OutlineInputBorder(),
               ),
             ),
-            SizedBox(height: 20),
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Author',
-                border: OutlineInputBorder(),
+            Center(
+              child: ElevatedButton(
+                onPressed: onAddToCart,
+                child: const Text('+ Keranjang'),
               ),
-            ),
-            SizedBox(height: 20),
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Price',
-                border: OutlineInputBorder(),
-              ),
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                // Add logic to add the product
-              },
-              child: Text('Add Product'),
             ),
           ],
         ),
@@ -225,57 +267,89 @@ class AddProductScreen extends StatelessWidget {
   }
 }
 
-class EditProductScreen extends StatelessWidget {
-  final String title;
-  final String author;
+class ProductDetailsScreen extends StatelessWidget {
+  final String id;
+  final String name;
   final String price;
+  final String imageUrl;
+  final String discount;
+  final String description;
 
-  const EditProductScreen({
+  const ProductDetailsScreen({
     super.key,
-    required this.title,
-    required this.author,
+    required this.id,
+    required this.name,
     required this.price,
+    required this.imageUrl,
+    required this.discount,
+    required this.description,
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Edit Product'),
+        backgroundColor: Colors.red,
+        title: Text(name),
       ),
-      body: Padding(
-        padding: EdgeInsets.all(16.0),
+      body: SingleChildScrollView(
         child: Column(
-          children: <Widget>[
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Title',
-                border: OutlineInputBorder(),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Image.network(imageUrl, fit: BoxFit.cover),
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 24,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8.0),
+                  if (discount.isNotEmpty)
+                    Text(
+                      discount,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        color: Colors.red,
+                      ),
+                    ),
+                  const SizedBox(height: 8.0),
+                  Text(
+                    price,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 16.0),
+                  const Text(
+                    'Deskripsi Produk',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 8.0),
+                  Text(
+                    description,
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 16.0),
+                  Center(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        // Add logic to add the product to cart
+                      },
+                      child: const Text('+ Keranjang'),
+                    ),
+                  ),
+                ],
               ),
-              controller: TextEditingController(text: title),
-            ),
-            SizedBox(height: 20),
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Author',
-                border: OutlineInputBorder(),
-              ),
-              controller: TextEditingController(text: author),
-            ),
-            SizedBox(height: 20),
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Price',
-                border: OutlineInputBorder(),
-              ),
-              controller: TextEditingController(text: price),
-            ),
-            SizedBox(height: 20),
-            ElevatedButton(
-              onPressed: () {
-                // Add logic to edit the product
-              },
-              child: Text('Save Changes'),
             ),
           ],
         ),
