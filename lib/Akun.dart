@@ -1,8 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:toko_buku/login.dart';
+import 'package:toko_buku/main.dart';
 
-class AkunScreen extends StatelessWidget {
+class AkunScreen extends StatefulWidget {
   const AkunScreen({super.key});
+
+  @override
+  State<AkunScreen> createState() => _AkunScreenState();
+}
+
+class _AkunScreenState extends State<AkunScreen> {
+  String userId = '';
+  String userName = '';
+  String userEmail = '';
+
+  @override
+  void initState() {
+    super.initState();
+    datauser();
+  }
+
+  Future<void> datauser() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      userId = prefs.getString('id') ?? '';
+      userName = prefs.getString('name') ?? '';
+      userEmail = prefs.getString('email') ?? '';
+    });
+  }
+
+  Future<void> logout() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.remove('id');
+    await prefs.remove('name');
+    await prefs.remove('email');
+    // Add any other keys you want to remove
+    Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const MyApp(),
+          ),
+        );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -17,11 +57,11 @@ class AkunScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Nama Pengguna:',
+              'Nama:',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             Text(
-              'Rissanssss', // Replace with actual user name
+              userName.isNotEmpty ? userName : 'Loading...',
               style: TextStyle(fontSize: 16),
             ),
             SizedBox(height: 16),
@@ -30,7 +70,7 @@ class AkunScreen extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             Text(
-              'Rissa@gmail.com', // Replace with actual email
+              userEmail.isNotEmpty ? userEmail : 'Loading...',
               style: TextStyle(fontSize: 16),
             ),
             SizedBox(height: 16),
@@ -39,7 +79,7 @@ class AkunScreen extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             Text(
-              '08123456789', // Replace with actual phone number
+              '08123456789', // Replace with actual phone number if available
               style: TextStyle(fontSize: 16),
             ),
             SizedBox(height: 16),
@@ -48,18 +88,14 @@ class AkunScreen extends StatelessWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             Text(
-              'Jalan Sudirman No. 123, Jakarta', // Replace with actual address
+              'Jalan Sudirman No. 123, Jakarta', // Replace with actual address if available
               style: TextStyle(fontSize: 16),
             ),
             SizedBox(height: 32),
             Center(
               child: ElevatedButton(
                 onPressed: () {
-                  // Add logic to logout user
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(builder: (context) => Login()),
-                  );
+                  logout();
                 },
                 child: Text('Logout'),
               ),

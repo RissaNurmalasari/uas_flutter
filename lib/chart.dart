@@ -11,7 +11,7 @@ class CartScreen extends StatefulWidget {
 class _CartScreenState extends State<CartScreen> {
   late List<CartItem> _cartItems = [];
   int _grandTotal = 0;
-  String baseUrl = "http://127.0.0.1:8000";
+  String baseUrl = "https://79cb-180-249-184-200.ngrok-free.app";
   @override
   void initState() {
     super.initState();
@@ -37,7 +37,7 @@ class _CartScreenState extends State<CartScreen> {
   Future<void> _getData() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String userId =
-        prefs.getString('user_id') ?? '636db03a-33a1-4a64-97ea-5713eac1b88e';
+        prefs.getString('id') ?? '';
 
     try {
       // Kirim permintaan HTTP ke server

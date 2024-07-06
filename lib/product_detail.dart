@@ -4,6 +4,7 @@ import 'package:toko_buku/main.dart';
 import 'package:toko_buku/chart.dart';
 
 class ProductItem extends StatelessWidget {
+  final String id;
   final String name;
   final String price;
   final String imageUrl;
@@ -12,12 +13,14 @@ class ProductItem extends StatelessWidget {
 
   const ProductItem({
     super.key,
+    required this.id,
     required this.name,
     required this.price,
     required this.imageUrl,
     required this.discount,
     required this.description,
   });
+
 
   @override
   Widget build(BuildContext context) {

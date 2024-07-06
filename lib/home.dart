@@ -5,9 +5,10 @@ import 'package:toko_buku/Akun.dart';
 import 'package:toko_buku/pesanan.dart';
 import 'package:toko_buku/chart.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:toko_buku/product_detail.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  const HomeScreen({Key? key}) : super(key: key);
 
   @override
   _HomeScreenState createState() => _HomeScreenState();
@@ -15,7 +16,10 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   List<ProductItem> products = [];
-  String baseUrl = "http://127.0.0.1:8000";
+  String baseUrl = "https://79cb-180-249-184-200.ngrok-free.app";
+  String jumlah_pemesanan = '';
+  String searchQuery = '';
+  List<ProductItem> searchResults = [];
 
   @override
   void initState() {
@@ -24,23 +28,38 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> fetchProducts() async {
-    final response = await http.get(Uri.parse('$baseUrl/api/buku'));
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String userId =
+        prefs.getString('id') ?? '';
 
+    final response =
+        await http.get(Uri.parse('$baseUrl/api/buku?user_id=$userId'));
+    print(response.body);
     if (response.statusCode == 200) {
-      print(response.body);
-      final List<dynamic> productData = json.decode(response.body);
-      setState(() {
-        products = productData.map((data) {
-          return ProductItem(
-            id: data['id'],
-            name: data['name'],
-            price: data['price'],
-            imageUrl: data['image_url'],
-            discount: data['discount'] ?? '',
-            description: data['description'],
-          );
-        }).toList();
-      });
+      // Parse the response body as a Map<String, dynamic>
+      Map<String, dynamic> responseData = json.decode(response.body);
+
+      // Check if the "buku" key exists and is a list
+      if (responseData.containsKey('buku') && responseData['buku'] is List) {
+        List<dynamic> productData = responseData['buku'];
+        int jumlahpesanan = responseData['jumlah_pemesanan'];
+        print(jumlahpesanan);
+        setState(() {
+          jumlah_pemesanan = jumlahpesanan.toString();
+          products = productData.map((data) {
+            return ProductItem(
+              id: data['id'].toString(),
+              name: data['name'],
+              price: data['price'].toString(),
+              imageUrl: data['image_url'],
+              discount: data['discount'] ?? '',
+              description: data['description'],
+            );
+          }).toList();
+        });
+      } else {
+        throw Exception('Failed to load products');
+      }
     } else {
       throw Exception('Failed to load products');
     }
@@ -49,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> tambahKeranjang(String itemId) async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String userId =
-        prefs.getString('user_id') ?? '636db03a-33a1-4a64-97ea-5713eac1b88e';
+        prefs.getString('id') ?? '';
     print(userId);
     print(itemId);
     final response = await http.post(
@@ -77,8 +96,26 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  void search(String query) {
+    setState(() {
+      searchQuery = query;
+      if (query.isNotEmpty) {
+        // Filter products based on the search query
+        searchResults = products
+            .where((product) =>
+                product.name.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+      } else {
+        searchResults.clear();
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    List<ProductItem> displayProducts =
+        searchQuery.isNotEmpty ? searchResults : products;
+
     return Scaffold(
       appBar: AppBar(
         backgroundColor: Colors.red,
@@ -87,20 +124,25 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: const Icon(Icons.search),
             onPressed: () {
-              // Add search functionality
+              showSearch(
+                context: context,
+                delegate: ProductSearch(products),
+              );
             },
           ),
           Stack(
             children: [
               IconButton(
                 icon: const Icon(Icons.shopping_cart),
-                onPressed: () {
-                  Navigator.push(
+                onPressed: () async {
+                  await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => CartScreen(),
                     ),
                   );
+                  // Refresh data when returning from the cart screen
+                  fetchProducts();
                 },
               ),
               Positioned(
@@ -115,9 +157,9 @@ class _HomeScreenState extends State<HomeScreen> {
                     minWidth: 18,
                     minHeight: 18,
                   ),
-                  child: const Text(
-                    '5',
-                    style: TextStyle(
+                  child: Text(
+                    jumlah_pemesanan,
+                    style: const TextStyle(
                       color: Colors.black,
                       fontSize: 12,
                     ),
@@ -131,9 +173,9 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: ListView.builder(
         padding: const EdgeInsets.all(8.0),
-        itemCount: products.length,
+        itemCount: displayProducts.length,
         itemBuilder: (context, index) {
-          final product = products[index];
+          final product = displayProducts[index];
           return ProductItemWidget(
             product: product,
             onAddToCart: () {
@@ -176,33 +218,15 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-class ProductItem {
-  final String id;
-  final String name;
-  final String price;
-  final String imageUrl;
-  final String discount;
-  final String description;
-
-  ProductItem({
-    required this.id,
-    required this.name,
-    required this.price,
-    required this.imageUrl,
-    required this.discount,
-    required this.description,
-  });
-}
-
 class ProductItemWidget extends StatelessWidget {
   final ProductItem product;
   final VoidCallback onAddToCart;
 
   const ProductItemWidget({
-    super.key,
+    Key? key,
     required this.product,
     required this.onAddToCart,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -274,16 +298,41 @@ class ProductDetailsScreen extends StatelessWidget {
   final String imageUrl;
   final String discount;
   final String description;
+  final String baseUrl = "https://79cb-180-249-184-200.ngrok-free.app";
 
   const ProductDetailsScreen({
-    super.key,
+    Key? key,
     required this.id,
     required this.name,
     required this.price,
     required this.imageUrl,
     required this.discount,
     required this.description,
-  });
+  }) : super(key: key);
+
+  Future<void> tambahPesanan(BuildContext context) async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String userId =
+        prefs.getString('id') ?? '';
+
+    final response = await http.post(
+      Uri.parse('$baseUrl/api/pemesanan?user_id=$userId&book_id=$id'),
+    );
+
+    if (response.statusCode == 200) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Berhasil Menambahkan Pesanan'),
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal Menambahkan barang'),
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -343,7 +392,7 @@ class ProductDetailsScreen extends StatelessWidget {
                   Center(
                     child: ElevatedButton(
                       onPressed: () {
-                        // Add logic to add the product to cart
+                        tambahPesanan(context);
                       },
                       child: const Text('+ Keranjang'),
                     ),
@@ -354,6 +403,88 @@ class ProductDetailsScreen extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class ProductSearch extends SearchDelegate<String> {
+  final List<ProductItem> products;
+
+  ProductSearch(this.products);
+
+  @override
+  List<Widget> buildActions(BuildContext context) {
+    return [
+      IconButton(
+        onPressed: () {
+          query = '';
+        },
+        icon: const Icon(Icons.clear),
+      ),
+    ];
+  }
+
+  @override
+  Widget buildLeading(BuildContext context) {
+    return IconButton(
+      onPressed: () {
+        close(context, '');
+      },
+      icon: const Icon(Icons.arrow_back),
+    );
+  }
+
+  @override
+  Widget buildResults(BuildContext context) {
+    List<ProductItem> searchResults = products
+        .where((product) =>
+            product.name.toLowerCase().contains(query.toLowerCase()))
+        .toList();
+    return ListView.builder(
+      itemCount: searchResults.length,
+      itemBuilder: (context, index) {
+        final product = searchResults[index];
+        return ListTile(
+          title: Text(product.name),
+          onTap: () {
+            close(context, product.name);
+          },
+        );
+      },
+    );
+  }
+
+  @override
+  Widget buildSuggestions(BuildContext context) {
+    List<ProductItem> suggestionList = query.isEmpty
+        ? products
+        : products
+            .where((product) =>
+                product.name.toLowerCase().contains(query.toLowerCase()))
+            .toList();
+    return ListView.builder(
+      itemCount: suggestionList.length,
+      itemBuilder: (context, index) {
+        final product = suggestionList[index];
+        return ListTile(
+          title: Text(product.name),
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => ProductDetailsScreen(
+                  id: product.id,
+                  name: product.name,
+                  price: product.price,
+                  imageUrl: product.imageUrl,
+                  discount: product.discount,
+                  description: product.description,
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }
